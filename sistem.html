@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Кликер с улучшениями</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(120deg, #a8edea, #fed6e3, #fcb69f, #a1c4fd);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            overflow-x: hidden;
+        }
+
+        @keyframes gradientBG {
+            0% {background-position: 0% 50%;}
+            50% {background-position: 100% 50%;}
+            100% {background-position: 0% 50%;}
+        }
+
+        .center-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        #score {
+            font-size: 2rem;
+            margin-bottom: 30px;
+        }
+        #circle {
+            position: relative; /* Для абсолютного позиционирования волны */
+            width: 150px;
+            height: 150px;
+            background: #4caf50;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: #fff;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+            user-select: none;
+            overflow: hidden; /* Обрезаем волну по кругу */
+        }
+        #circle:active {
+            transform: scale(0.95);
+        }
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            transform: scale(0);
+            animation: ripple-effect 0.7s linear;
+            pointer-events: none;
+            opacity: 0.7;
+            /* Цвет волны будет задаваться через style в JS */
+        }
+        @keyframes ripple-effect {
+            to {
+                transform: scale(2.5);
+                opacity: 0;
+            }
+        }
+        /* Панель улучшений */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            right: -300px;
+            width: 300px;
+            height: 100%;
+            background: #fff;
+            box-shadow: -2px 0 8px rgba(0,0,0,0.1);
+            transition: right 0.3s;
+            padding: 30px 20px;
+            z-index: 100;
+        }
+        .sidebar.open {
+            right: 0;
+        }
+        .sidebar h2 {
+            margin-top: 0;
+        }
+        .upgrade {
+            margin-bottom: 20px;
+        }
+        .upgrade button {
+            margin-top: 5px;
+            width: 100%;
+            padding: 8px;
+            background: #4caf50;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .upgrade button:disabled {
+            background: #aaa;
+            cursor: not-allowed;
+        }
+        .sidebar-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 101;
+            background: #4caf50;
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            font-size: 2rem;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .screen-ripple {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0.5;
+            z-index: 9999;
+            width: 200vmax;
+            height: 200vmax;
+            background: #a8edea;
+            animation: screen-ripple-effect 0.8s linear forwards;
+        }
+        @keyframes screen-ripple-effect {
+            to {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0;
+            }
+        }
+        .secret-btn {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 102;
+            background: #ff9800;
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .secret-modal {
+            display: none;
+            position: fixed;
+            left: 0; top: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        .secret-modal.active {
+            display: flex;
+        }
+        .secret-modal-content {
+            background: #fff;
+            padding: 24px 32px;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .secret-modal-content input {
+            padding: 8px;
+            font-size: 1rem;
+            margin-bottom: 12px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+        .secret-modal-content button {
+            padding: 8px 18px;
+            background: #4caf50;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 0 4px;
+        }
+        .secret-modal-content .close-btn {
+            background: #aaa;
+        }
+        .secret-modal-content .success {
+            color: #4caf50;
+            margin-top: 8px;
+        }
+        .secret-modal-content .fail {
+            color: #e53935;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar" id="sidebar">
+        <h2>Улучшения</h2>
+        <div class="upgrade">
+            <div>+1 к клику<br>Цена: <span id="upgrade1-cost">10</span></div>
+            <button id="upgrade1-btn"
+                onmousedown="startUpgradeHold(1)"
+                onmouseup="stopUpgradeHold()"
+                onmouseleave="stopUpgradeHold()"
+                onclick="buyUpgrade(1)">Купить</button>
+        </div>
+        <div class="upgrade" id="upgrade2-block">
+            <div>Автоклик 1/сек<br>Цена: <span id="upgrade2-cost">50</span></div>
+            <button id="upgrade2-btn"
+                onmousedown="startUpgradeHold(2)"
+                onmouseup="stopUpgradeHold()"
+                onmouseleave="stopUpgradeHold()"
+                onclick="buyUpgrade(2)">Купить</button>
+        </div>
+        <div class="upgrade">
+            <div>Улучшить автоклик (+1/сек)<br>Цена: <span id="upgrade3-cost">100</span></div>
+            <button id="upgrade3-btn"
+                onmousedown="startUpgradeHold(3)"
+                onmouseup="stopUpgradeHold()"
+                onmouseleave="stopUpgradeHold()"
+                onclick="buyUpgrade(3)">Купить</button>
+        </div>
+    </div>
+    <div class="center-container">
+        <div id="score">Очки: 0</div>
+        <div id="circle" onclick="addScore(event)">Клик!</div>
+    </div>
+    <button class="secret-btn" onclick="openSecretModal()" title="Секрет">★</button>
+    <div class="secret-modal" id="secretModal">
+        <div class="secret-modal-content">
+            <span>Введите секретный код:</span>
+            <input type="text" id="secretInput" placeholder="Код">
+            <div>
+                <button onclick="checkSecretCode()">OK</button>
+                <button class="close-btn" onclick="closeSecretModal()">Закрыть</button>
+            </div>
+            <div id="secretMsg"></div>
+        </div>
+    </div>
+    <script>
+        let score = 0;
+        let clickPower = 1;
+        let autoClick = 0;
+
+        // Цвета для волны, совпадающие с градиентом фона
+        const rippleColors = [
+            "#a8edea", "#fed6e3", "#fcb69f", "#a1c4fd"
+        ];
+
+        // Стоимость улучшений
+        let upgradeCosts = [0, 10, 50, 100];
+
+        function updateUI() {
+            document.getElementById('score').textContent = `Очки: ${score}`;
+            document.getElementById('upgrade1-cost').textContent = upgradeCosts[1];
+            document.getElementById('upgrade3-cost').textContent = upgradeCosts[3];
+
+            // Автоклик можно купить только один раз, после покупки скрываем блок
+            const autoClickBlock = document.getElementById('upgrade2-block');
+            if (autoClick > 0) {
+                autoClickBlock.style.display = 'none';
+            } else {
+                document.getElementById('upgrade2-cost').textContent = upgradeCosts[2];
+                document.getElementById('upgrade2-btn').disabled = score < upgradeCosts[2];
+                autoClickBlock.style.display = '';
+            }
+
+            document.getElementById('upgrade1-btn').disabled = score < upgradeCosts[1];
+            document.getElementById('upgrade3-btn').disabled = score < upgradeCosts[3] || autoClick === 0;
+        }
+
+        function addScore(event) {
+            score += clickPower;
+            createScreenRipple();
+            updateUI();
+        }
+
+        // Волна на весь экран
+        function createScreenRipple() {
+            const ripple = document.createElement('span');
+            ripple.className = 'screen-ripple';
+            ripple.style.background = rippleColors[Math.floor(Math.random() * rippleColors.length)];
+            document.body.appendChild(ripple);
+            ripple.addEventListener('animationend', () => {
+                ripple.remove();
+            });
+        }
+
+        function buyUpgrade(upgrade) {
+            if (score < upgradeCosts[upgrade]) return;
+            score -= upgradeCosts[upgrade];
+            if (upgrade === 1) {
+                clickPower += 1;
+                // upgradeCosts[1] = Math.floor(upgradeCosts[1] * 1.35); // УБРАТЬ ЭТУ СТРОКУ
+            } else if (upgrade === 2) {
+                autoClick = 1;
+                startAutoClick();
+            } else if (upgrade === 3) {
+                autoClick += 1;
+                // upgradeCosts[3] = Math.floor(upgradeCosts[3] * 1.45); // УБРАТЬ ЭТУ СТРОКУ
+            }
+            updateUI();
+        }
+
+        function startAutoClick() {
+            setInterval(() => {
+                if (autoClick > 0) {
+                    score += autoClick;
+                    updateUI();
+                }
+            }, 1000);
+        }
+
+        // Выдвижная панель
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+        }
+
+        // Секретный код и награда
+        const SECRET_CODE = "copilot2024";
+        const SECRET_REWARD = 1000;
+        const SECRET_CODE2 = "amega";
+        const SECRET_REWARD2 = 1000000;
+        let secretUsed = false;
+        let secret2Used = false;
+
+        function checkSecretCode() {
+            const input = document.getElementById('secretInput').value.trim();
+            const msg = document.getElementById('secretMsg');
+            if (input === SECRET_CODE2) {
+                if (secret2Used) {
+                    msg.textContent = "Код уже был использован!";
+                    msg.className = "fail";
+                    return;
+                }
+                score += SECRET_REWARD2;
+                updateUI();
+                msg.textContent = `Успех! +${SECRET_REWARD2} очков`;
+                msg.className = "success";
+                secret2Used = true;
+                return;
+            }
+            if (input === SECRET_CODE) {
+                if (secretUsed) {
+                    msg.textContent = "Код уже был использован!";
+                    msg.className = "fail";
+                    return;
+                }
+                score += SECRET_REWARD;
+                updateUI();
+                msg.textContent = `Успех! +${SECRET_REWARD} очков`;
+                msg.className = "success";
+                secretUsed = true;
+            } else {
+                msg.textContent = "Неверный код!";
+                msg.className = "fail";
+            }
+        }
+
+        let holdInterval = null;
+        let holdDelay = 100; // стартовая задержка меньше
+        let holdStep = 0;
+
+        function startUpgradeHold(upgrade) {
+            if (holdInterval) return;
+            holdStep = 0;
+            function holdBuy() {
+                if (document.getElementById(`upgrade${upgrade}-btn`).disabled) {
+                    stopUpgradeHold();
+                    return;
+                }
+                buyUpgrade(upgrade);
+                holdStep++;
+                // Очень быстрое ускорение: минимальная задержка 1мс, шаг ускорения 10мс
+                let nextDelay = Math.max(1, holdDelay - holdStep * 10);
+                holdInterval = setTimeout(holdBuy, nextDelay);
+            }
+            holdInterval = setTimeout(holdBuy, holdDelay);
+        }
+
+        function stopUpgradeHold() {
+            clearTimeout(holdInterval);
+            holdInterval = null;
+        }
+
+        function openSecretModal() {
+            document.getElementById('secretModal').classList.add('active');
+            document.getElementById('secretInput').value = '';
+            document.getElementById('secretMsg').textContent = '';
+        }
+        function closeSecretModal() {
+            document.getElementById('secretModal').classList.remove('active');
+        }
+
+        // Инициализация
+        updateUI();
+    </script>
+</body>
+</html>
